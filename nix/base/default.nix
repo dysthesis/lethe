@@ -50,7 +50,7 @@
           ../../Cargo.toml
           ../../Cargo.lock
           (craneLib.fileset.commonCargoSources ../../crates/phaneron-core)
-          (craneLib.fileset.commonCargoSources ../../crates/my-workspace-hack)
+          (craneLib.fileset.commonCargoSources ../../crates/phaneron-workspace-hack)
           (craneLib.fileset.commonCargoSources crate)
         ];
       };

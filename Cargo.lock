@@ -3,26 +3,24 @@
 version = 4
 
 [[package]]
-name = "my-workspace-hack"
-version = "0.1.0"
-dependencies = [
- "tokio",
-]
-
-[[package]]
 name = "phaneron-cli"
 version = "0.1.0"
 dependencies = [
- "my-workspace-hack",
  "phaneron-core",
- "tokio",
+ "phaneron-workspace-hack",
 ]
 
 [[package]]
 name = "phaneron-core"
 version = "0.1.0"
 dependencies = [
- "my-workspace-hack",
+ "phaneron-workspace-hack",
+]
+
+[[package]]
+name = "phaneron-workspace-hack"
+version = "0.1.0"
+dependencies = [
  "tokio",
 ]
 
