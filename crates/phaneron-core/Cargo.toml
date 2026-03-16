@@ -1,8 +1,0 @@
-[package]
-name = "phaneron-core"
-version.workspace = true
-edition.workspace = true
-publish = false
-
-[dependencies]
-phaneron-workspace-hack = { version = "0.1", path = "../phaneron-workspace-hack" }

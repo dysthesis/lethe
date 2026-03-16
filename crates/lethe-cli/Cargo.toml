@@ -1,0 +1,9 @@
+[package]
+name = "lethe-cli"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+lethe-core = { path = "../lethe-core" }
+lethe-workspace-hack = { version = "0.1", path = "../lethe-workspace-hack" }

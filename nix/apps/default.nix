@@ -1,9 +1,9 @@
 {...}: {
   perSystem = {config, ...}: {
     apps = {
-      phaneron-cli = {
+      lethe-cli = {
         type = "app";
-        program = "${config.packages.phaneron-cli}/bin/phaneron-cli";
+        program = "${config.packages.lethe-cli}/bin/lethe-cli";
       };
     };
   };

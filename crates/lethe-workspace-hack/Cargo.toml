@@ -3,7 +3,7 @@
 #     cargo hakari generate
 
 [package]
-name = "phaneron-workspace-hack"
+name = "lethe-workspace-hack"
 version = "0.1.0"
 edition.workspace = true
 description = "workspace-hack package, managed by hakari"

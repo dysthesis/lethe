@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 # Members are wildcarded so flake.nix can build top-level crates independently
-# (e.g., phaneron-cli) without unnecessary rebuilds when other crates change.
+# (e.g., lethe-cli) without unnecessary rebuilds when other crates change.
 members = ["crates/*"]
 
 [workspace.package]
@@ -9,4 +9,4 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.metadata.crane]
-name = "phaneron"
+name = "lethe"

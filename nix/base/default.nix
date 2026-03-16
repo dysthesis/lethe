@@ -49,8 +49,8 @@
         fileset = lib.fileset.unions [
           ../../Cargo.toml
           ../../Cargo.lock
-          (craneLib.fileset.commonCargoSources ../../crates/phaneron-core)
-          (craneLib.fileset.commonCargoSources ../../crates/phaneron-workspace-hack)
+          (craneLib.fileset.commonCargoSources ../../crates/lethe-core)
+          (craneLib.fileset.commonCargoSources ../../crates/lethe-workspace-hack)
           (craneLib.fileset.commonCargoSources crate)
         ];
       };

@@ -3,22 +3,22 @@
 version = 4
 
 [[package]]
-name = "phaneron-cli"
+name = "lethe-cli"
 version = "0.1.0"
 dependencies = [
- "phaneron-core",
- "phaneron-workspace-hack",
+ "lethe-core",
+ "lethe-workspace-hack",
 ]
 
 [[package]]
-name = "phaneron-core"
+name = "lethe-core"
 version = "0.1.0"
 dependencies = [
- "phaneron-workspace-hack",
+ "lethe-workspace-hack",
 ]
 
 [[package]]
-name = "phaneron-workspace-hack"
+name = "lethe-workspace-hack"
 version = "0.1.0"
 dependencies = [
  "tokio",

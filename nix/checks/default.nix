@@ -14,9 +14,9 @@
   in {
     checks = {
       # Build the crates as part of `nix flake check` for convenience.
-      inherit (config.packages) phaneron-cli phaneron-core;
+      inherit (config.packages) lethe-cli lethe-core;
 
-      phaneron-workspace-clippy = craneLib.cargoClippy (
+      lethe-workspace-clippy = craneLib.cargoClippy (
         commonArgs
         // {
           inherit cargoArtifacts;
@@ -24,7 +24,7 @@
         }
       );
 
-      phaneron-workspace-doc = craneLib.cargoDoc (
+      lethe-workspace-doc = craneLib.cargoDoc (
         commonArgs
         // {
           inherit cargoArtifacts;
@@ -32,16 +32,16 @@
         }
       );
 
-      phaneron-workspace-audit = craneLib.cargoAudit {
+      lethe-workspace-audit = craneLib.cargoAudit {
         inherit src;
         advisory-db = advisoryDb;
       };
 
-      phaneron-workspace-deny = craneLib.cargoDeny {
+      lethe-workspace-deny = craneLib.cargoDeny {
         inherit src;
       };
 
-      phaneron-workspace-nextest = craneLib.cargoNextest (
+      lethe-workspace-nextest = craneLib.cargoNextest (
         commonArgs
         // {
           inherit cargoArtifacts;
@@ -51,9 +51,9 @@
         }
       );
 
-      phaneron-workspace-hakari = craneLib.mkCargoDerivation {
+      lethe-workspace-hakari = craneLib.mkCargoDerivation {
         inherit src;
-        pname = "phaneron-workspace-hakari";
+        pname = "lethe-workspace-hakari";
         cargoArtifacts = null;
         doInstallCargoArtifacts = false;
 

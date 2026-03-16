@@ -1,0 +1,8 @@
+[package]
+name = "lethe-core"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+lethe-workspace-hack = { version = "0.1", path = "../lethe-workspace-hack" }

@@ -5,29 +5,29 @@
     fileSetForCrate,
     ...
   }: let
-    phaneron-core = craneLib.buildPackage (
+    lethe-core = craneLib.buildPackage (
       individualCrateArgs
       // {
-        pname = "phaneron-core";
-        cargoExtraArgs = "-p phaneron-core";
-        src = fileSetForCrate ../../crates/phaneron-core;
+        pname = "lethe-core";
+        cargoExtraArgs = "-p lethe-core";
+        src = fileSetForCrate ../../crates/lethe-core;
       }
     );
 
-    phaneron-cli = craneLib.buildPackage (
+    lethe-cli = craneLib.buildPackage (
       individualCrateArgs
       // {
-        pname = "phaneron-cli";
-        cargoExtraArgs = "-p phaneron-cli";
-        src = fileSetForCrate ../../crates/phaneron-cli;
+        pname = "lethe-cli";
+        cargoExtraArgs = "-p lethe-cli";
+        src = fileSetForCrate ../../crates/lethe-cli;
         meta = {
-          mainProgram = "phaneron-cli";
+          mainProgram = "lethe-cli";
         };
       }
     );
   in {
     packages = {
-      inherit phaneron-core phaneron-cli;
+      inherit lethe-core lethe-cli;
     };
   };
 }
