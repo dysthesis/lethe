@@ -15,3 +15,7 @@ The data model of Lethe centres around two structures, namely
 Furthermore, thare are
 
 - [identifiers](./identifiers.md) to uniquely identify each note
+
+## Miscellaneous
+
+- Notes on [testing](./testing.md).
