@@ -4,5 +4,19 @@ version.workspace = true
 edition.workspace = true
 publish = false
 
+[features]
+arbitrary = ["chrono/arbitrary", "uuid/arbitrary"]
+
 [dependencies]
+chrono = { version = "0.4.44", default-features = false, features = ["now", "serde"] }
+color-eyre = { version = "0.6.5", default-features = false }
 lethe-workspace-hack = { version = "0.1", path = "../lethe-workspace-hack" }
+serde = { version = "1.0.228", default-features = false, features = ["derive"] }
+thiserror = { version = "2.0.18", default-features = false }
+toml = { version = "1.0.6", default-features = false, features = ["display", "parse", "serde"] }
+uuid = { version = "1.22.0", default-features = false, features = ["serde", "v4", "std"] }
+
+[dev-dependencies]
+proptest = "1.10.0"
+proptest-derive = "0.8.0"
+tempfile = "3.27.0"

@@ -16,6 +16,7 @@
         config.treefmt.build.wrapper
 
         # Rust
+        bacon
         cargo-hakari
         cargo-nextest
         cargo-llvm-cov
