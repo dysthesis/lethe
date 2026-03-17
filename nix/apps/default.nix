@@ -1,4 +1,4 @@
-{...}: {
+{
   perSystem = {config, ...}: {
     apps = {
       lethe-cli = {

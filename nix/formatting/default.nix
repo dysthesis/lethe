@@ -1,9 +1,5 @@
-{inputs, ...}: {
-  perSystem = {
-    pkgs,
-    toolchain,
-    ...
-  }: {
+{
+  perSystem = {toolchain, ...}: {
     treefmt = {
       projectRootFile = "flake.nix";
       flakeFormatter = true;
@@ -25,6 +21,7 @@
           "target/**"
           ".direnv/**"
           "result*"
+          "crates/lethe-workspace-hack/Cargo.toml"
         ];
 
         formatter = {

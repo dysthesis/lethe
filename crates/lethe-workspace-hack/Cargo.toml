@@ -15,6 +15,16 @@ publish = false
 
 ### BEGIN HAKARI SECTION
 [dependencies]
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
+chrono = { version = "0.4", default-features = false, features = ["arbitrary", "now", "serde"] }
+color-eyre = { version = "0.6" }
+num-traits = { version = "0.2", default-features = false, features = ["std"] }
+serde = { version = "1", default-features = false, features = ["derive", "std"] }
+serde_core = { version = "1", default-features = false, features = ["alloc", "result", "std"] }
+uuid = { version = "1", default-features = false, features = ["arbitrary", "serde", "std", "v4"] }
+
+[build-dependencies]
+proc-macro2 = { version = "1" }
+quote = { version = "1" }
+syn = { version = "2", features = ["extra-traits", "full", "visit"] }
 
 ### END HAKARI SECTION
