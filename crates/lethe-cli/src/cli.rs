@@ -14,10 +14,10 @@ pub struct Cli {
 pub enum Command {
     New {
         body: Option<String>,
-        #[arg(long, conflicts_with_all = ["body", "body_stdin"])]
+        #[arg(long, conflicts_with = "body")]
         body_file: Option<PathBuf>,
         #[arg(long, conflicts_with_all = ["body", "body_file"])]
-        body_stdin: bool,
+        empty_body: bool,
         #[arg(short, long, value_delimiter = ',')]
         aliases: Option<Vec<String>>,
     },
@@ -26,12 +26,12 @@ pub enum Command {
     },
     Edit {
         id: String,
-        #[arg(long, conflicts_with_all = ["body_file", "body_stdin"])]
+        #[arg(long, conflicts_with = "body_file")]
         body: Option<String>,
-        #[arg(long, conflicts_with_all = ["body", "body_stdin"])]
+        #[arg(long, conflicts_with = "body")]
         body_file: Option<PathBuf>,
         #[arg(long, conflicts_with_all = ["body", "body_file"])]
-        body_stdin: bool,
+        empty_body: bool,
         #[arg(long, value_delimiter = ',', conflicts_with = "clear_aliases")]
         aliases: Option<Vec<String>>,
         #[arg(long, conflicts_with = "aliases")]

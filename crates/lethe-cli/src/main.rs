@@ -1,6 +1,6 @@
 use std::{
     env, fs,
-    io::{self, Read},
+    io::{self, IsTerminal, Read},
     path::{Path, PathBuf},
     process::Command as ProcessCommand,
     str::FromStr,
@@ -9,7 +9,7 @@ use std::{
 use clap::Parser;
 use color_eyre::eyre::eyre;
 use lethe_core::{identifier::Identifier, note::Note};
-use tempfile::NamedTempFile;
+use tempfile::{Builder, NamedTempFile};
 
 use crate::cli::Cli;
 
@@ -18,14 +18,15 @@ fn main() -> color_eyre::eyre::Result<()> {
     color_eyre::install()?;
     let cli = Cli::parse();
     let root = cli.dir.or_else(|| env::current_dir().ok()).ok_or_else(|| eyre!("Could not determine current working directory, and none was provided in the command-line arguments!"))?;
+    let stdin_is_piped = !io::stdin().is_terminal();
     let res = match cli.command {
         cli::Command::New {
             body,
             body_file,
-            body_stdin,
+            empty_body,
             aliases,
         } => {
-            let body = resolve_new_body(body, body_file, body_stdin)?;
+            let body = resolve_new_body(body, body_file, empty_body, stdin_is_piped)?;
             Note::new(&root, body, aliases.unwrap_or_default())
         }
         cli::Command::Read { id } => {
@@ -36,7 +37,7 @@ fn main() -> color_eyre::eyre::Result<()> {
             id,
             body,
             body_file,
-            body_stdin,
+            empty_body,
             aliases,
             clear_aliases,
             set,
@@ -56,16 +57,19 @@ fn main() -> color_eyre::eyre::Result<()> {
             validate_extra_keys(set_pairs.iter().map(|(key, _)| key.as_str()))?;
             validate_extra_keys(unset.iter().map(|key| key.as_str()))?;
 
-            let has_other_edits =
-                aliases.is_some() || clear_aliases || !set_pairs.is_empty() || !unset.is_empty()
-                    || clear_extra;
+            let has_other_edits = aliases.is_some()
+                || clear_aliases
+                || !set_pairs.is_empty()
+                || !unset.is_empty()
+                || clear_extra;
 
             let body = resolve_edit_body(
                 &note,
                 body,
                 body_file,
-                body_stdin,
                 has_other_edits,
+                empty_body,
+                stdin_is_piped,
             )?;
 
             let changed = note.update(|edit| {
@@ -109,12 +113,12 @@ fn is_reserved_key(key: &str) -> bool {
     RESERVED_KEYS.iter().any(|reserved| reserved == &key)
 }
 
-fn validate_extra_keys<'a>(
-    keys: impl Iterator<Item = &'a str>,
-) -> color_eyre::eyre::Result<()> {
+fn validate_extra_keys<'a>(keys: impl Iterator<Item = &'a str>) -> color_eyre::eyre::Result<()> {
     for key in keys {
         if is_reserved_key(key) {
-            return Err(eyre!("Metadata key `{key}` is reserved and cannot be set via extra"));
+            return Err(eyre!(
+                "Metadata key `{key}` is reserved and cannot be set via extra"
+            ));
         }
         if key.contains('.') {
             return Err(eyre!(
@@ -144,14 +148,10 @@ fn parse_set_pairs(items: &[String]) -> color_eyre::eyre::Result<Vec<(String, to
         }
         let snippet = format!("{key} = {raw_value}");
         let table: toml::Table = toml::from_str(&snippet).map_err(|error| {
-            eyre!(
-                "Invalid TOML value in --set `{item}`: {error}. Try quoting strings."
-            )
+            eyre!("Invalid TOML value in --set `{item}`: {error}. Try quoting strings.")
         })?;
         let value = table.get(key).ok_or_else(|| {
-            eyre!(
-                "Invalid --set value `{item}`; only simple top-level keys are supported"
-            )
+            eyre!("Invalid --set value `{item}`; only simple top-level keys are supported")
         })?;
         pairs.push((key.to_string(), value.clone()));
     }
@@ -161,16 +161,28 @@ fn parse_set_pairs(items: &[String]) -> color_eyre::eyre::Result<Vec<(String, to
 fn resolve_new_body(
     body: Option<String>,
     body_file: Option<PathBuf>,
-    body_stdin: bool,
+    empty_body: bool,
+    stdin_is_piped: bool,
 ) -> color_eyre::eyre::Result<String> {
+    if empty_body {
+        if body.is_some() || body_file.is_some() {
+            return Err(eyre!(
+                "--empty-body cannot be combined with --body or --body-file"
+            ));
+        }
+        if stdin_is_piped {
+            return Err(eyre!("--empty-body cannot be used when stdin is piped"));
+        }
+        return Ok(String::new());
+    }
     if let Some(body) = body {
-        return Ok(body);
+        return ensure_body(body);
     }
     if let Some(path) = body_file {
-        return read_body_from_file(&path);
+        return read_body_from_file(&path).and_then(ensure_body);
     }
-    if body_stdin {
-        return read_body_from_stdin();
+    if stdin_is_piped {
+        return read_body_from_stdin().and_then(ensure_body);
     }
     open_editor("")
 }
@@ -179,17 +191,33 @@ fn resolve_edit_body(
     note: &Note,
     body: Option<String>,
     body_file: Option<PathBuf>,
-    body_stdin: bool,
     has_other_edits: bool,
+    empty_body: bool,
+    stdin_is_piped: bool,
 ) -> color_eyre::eyre::Result<Option<String>> {
+    if empty_body {
+        if body.is_some() || body_file.is_some() {
+            return Err(eyre!(
+                "--empty-body cannot be combined with --body or --body-file"
+            ));
+        }
+        if stdin_is_piped {
+            return Err(eyre!("--empty-body cannot be used when stdin is piped"));
+        }
+        return Ok(Some(String::new()));
+    }
     if let Some(body) = body {
-        return Ok(Some(body));
+        return ensure_body(body).map(Some);
     }
     if let Some(path) = body_file {
-        return read_body_from_file(&path).map(Some);
+        return read_body_from_file(&path)
+            .and_then(ensure_body)
+            .map(Some);
     }
-    if body_stdin {
-        return read_body_from_stdin().map(Some);
+    if stdin_is_piped {
+        return read_body_from_stdin()
+            .and_then(ensure_body)
+            .map(Some);
     }
     if has_other_edits {
         return Ok(None);
@@ -210,8 +238,21 @@ fn read_body_from_stdin() -> color_eyre::eyre::Result<String> {
     Ok(buffer)
 }
 
+fn ensure_body(body: String) -> color_eyre::eyre::Result<String> {
+    if body.trim().is_empty() {
+        Err(eyre!(
+            "No note body was provided; use --empty-body to permit an empty body"
+        ))
+    } else {
+        Ok(body)
+    }
+}
+
 fn open_editor(initial: &str) -> color_eyre::eyre::Result<String> {
-    let temp = NamedTempFile::new().map_err(|error| eyre!("Failed to create temp file: {error}"))?;
+    let temp = Builder::new()
+        .suffix(".md")
+        .tempfile()
+        .map_err(|error| eyre!("Failed to create temp file: {error}"))?;
     fs::write(temp.path(), initial)
         .map_err(|error| eyre!("Failed to write editor temp file: {error}"))?;
 
@@ -219,7 +260,7 @@ fn open_editor(initial: &str) -> color_eyre::eyre::Result<String> {
     let mut parts = shell_words::split(&editor)
         .map_err(|error| eyre!("Failed to parse $EDITOR `{editor}`: {error}"))?;
     let command = parts
-        .get(0)
+        .first()
         .ok_or_else(|| eyre!("$EDITOR is empty; set it to your preferred editor"))?
         .to_string();
     let args = parts.drain(1..).collect::<Vec<_>>();
@@ -233,6 +274,7 @@ fn open_editor(initial: &str) -> color_eyre::eyre::Result<String> {
         return Err(eyre!("Editor exited with status {status}"));
     }
 
-    fs::read_to_string(temp.path())
-        .map_err(|error| eyre!("Failed to read editor temp file: {error}"))
+    let body = fs::read_to_string(temp.path())
+        .map_err(|error| eyre!("Failed to read editor temp file: {error}"))?;
+    ensure_body(body)
 }
