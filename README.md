@@ -1,5 +1,11 @@
 **TODO: REVISE THIS README**
 
+## Architecture (current direction)
+
+- `note`: the Note data model plus edit semantics.
+- `store`: persistence boundary (`Store` trait) with `NoteStore` as the filesystem implementation.
+- `repository`: vault/graph layer (aliases, links, search) built on a `Store`.
+
 - Notes similar to microblogging, such that each note is atomic, without a mandatory title (but instead, a possibly empty list of aliases)
 - Main view is timeline
 - Inspecting each note will also show a GitHub-issues-esque timeline/list of mentions for that note (Obsidian-style note linking)

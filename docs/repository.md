@@ -1,3 +1,4 @@
 # Repository
 
-A repository is a collection of [notes](./notes.md).
+A repository is an index of the [store](./store.md) -- it contains the store
+itself.

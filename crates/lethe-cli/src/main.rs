@@ -8,8 +8,12 @@ use std::{
 
 use clap::Parser;
 use color_eyre::eyre::eyre;
-use lethe_core::{identifier::Identifier, note::Note};
-use tempfile::{Builder, NamedTempFile};
+use lethe_core::{
+    identifier::Identifier,
+    note::Note,
+    repository::{AliasesEdit, BodyEdit, CreateSpec, EditSpec, ExtraEdit, Repository},
+};
+use tempfile::Builder;
 
 use crate::cli::Cli;
 
@@ -26,12 +30,14 @@ fn main() -> color_eyre::eyre::Result<()> {
             empty_body,
             aliases,
         } => {
+            let mut repo = Repository::open(root.clone());
             let body = resolve_new_body(body, body_file, empty_body, stdin_is_piped)?;
-            Note::new(&root, body, aliases.unwrap_or_default())
+            repo.create_note(CreateSpec::new(body, aliases.unwrap_or_default()))
         }
         cli::Command::Read { id } => {
+            let mut repo = Repository::open(root.clone());
             let trimmed = id.trim();
-            Note::read(Identifier::from_str(trimmed)?, root)
+            repo.read_note(Identifier::from_str(trimmed)?)
         }
         cli::Command::Edit {
             id,
@@ -44,22 +50,13 @@ fn main() -> color_eyre::eyre::Result<()> {
             unset,
             clear_extra,
         } => {
+            let mut repo = Repository::open(root.clone());
             let trimmed = id.trim();
-            let mut note = Note::read(Identifier::from_str(trimmed)?, root.clone())?;
-
-            if clear_extra && (!set.is_empty() || !unset.is_empty()) {
-                return Err(eyre!(
-                    "--clear-extra cannot be combined with --set or --unset"
-                ));
-            }
-
-            let set_pairs = parse_set_pairs(&set)?;
-            validate_extra_keys(set_pairs.iter().map(|(key, _)| key.as_str()))?;
-            validate_extra_keys(unset.iter().map(|key| key.as_str()))?;
+            let mut note = repo.read_note(Identifier::from_str(trimmed)?)?;
 
             let has_other_edits = aliases.is_some()
                 || clear_aliases
-                || !set_pairs.is_empty()
+                || !set.is_empty()
                 || !unset.is_empty()
                 || clear_extra;
 
@@ -72,31 +69,21 @@ fn main() -> color_eyre::eyre::Result<()> {
                 stdin_is_piped,
             )?;
 
-            let changed = note.update(|edit| {
-                if let Some(body) = body {
-                    edit.set_body(body);
-                }
-                if clear_aliases {
-                    edit.set_aliases(Vec::new());
-                }
-                if let Some(aliases) = aliases {
-                    edit.set_aliases(aliases);
-                }
-                if clear_extra {
-                    edit.clear_extra();
-                }
-                for (key, value) in set_pairs {
-                    edit.set_extra_value(key, value)?;
-                }
-                for key in unset {
-                    edit.remove_extra_key(&key)?;
-                }
-                Ok(())
-            })?;
+            let body_edit = match body {
+                Some(body) => BodyEdit::Replace(body),
+                None => BodyEdit::Keep,
+            };
+            let aliases_edit = if clear_aliases {
+                AliasesEdit::Clear
+            } else if let Some(aliases) = aliases {
+                AliasesEdit::Replace(aliases)
+            } else {
+                AliasesEdit::Keep
+            };
+            let extra = ExtraEdit::from_raw(set, unset, clear_extra)?;
 
-            if changed {
-                note.write(&root)?;
-            }
+            let spec = EditSpec::new(body_edit, aliases_edit, extra);
+            let _changed = repo.edit_loaded_note(&mut note, spec)?;
 
             Ok(note)
         }
@@ -105,57 +92,6 @@ fn main() -> color_eyre::eyre::Result<()> {
     println!("Note: {res:?}");
 
     Ok(())
-}
-
-const RESERVED_KEYS: [&str; 4] = ["id", "ctime", "mtime", "aliases"];
-
-fn is_reserved_key(key: &str) -> bool {
-    RESERVED_KEYS.iter().any(|reserved| reserved == &key)
-}
-
-fn validate_extra_keys<'a>(keys: impl Iterator<Item = &'a str>) -> color_eyre::eyre::Result<()> {
-    for key in keys {
-        if is_reserved_key(key) {
-            return Err(eyre!(
-                "Metadata key `{key}` is reserved and cannot be set via extra"
-            ));
-        }
-        if key.contains('.') {
-            return Err(eyre!(
-                "Metadata key `{key}` is not supported: nested keys are not yet supported"
-            ));
-        }
-        if key.trim().is_empty() {
-            return Err(eyre!("Metadata key cannot be empty"));
-        }
-    }
-    Ok(())
-}
-
-fn parse_set_pairs(items: &[String]) -> color_eyre::eyre::Result<Vec<(String, toml::Value)>> {
-    let mut pairs = Vec::with_capacity(items.len());
-    for item in items {
-        let (key, raw_value) = item
-            .split_once('=')
-            .ok_or_else(|| eyre!("Invalid --set value `{item}`; expected KEY=VALUE"))?;
-        let key = key.trim();
-        let raw_value = raw_value.trim();
-        if key.is_empty() {
-            return Err(eyre!("Invalid --set value `{item}`; key is empty"));
-        }
-        if raw_value.is_empty() {
-            return Err(eyre!("Invalid --set value `{item}`; value is empty"));
-        }
-        let snippet = format!("{key} = {raw_value}");
-        let table: toml::Table = toml::from_str(&snippet).map_err(|error| {
-            eyre!("Invalid TOML value in --set `{item}`: {error}. Try quoting strings.")
-        })?;
-        let value = table.get(key).ok_or_else(|| {
-            eyre!("Invalid --set value `{item}`; only simple top-level keys are supported")
-        })?;
-        pairs.push((key.to_string(), value.clone()));
-    }
-    Ok(pairs)
 }
 
 fn resolve_new_body(

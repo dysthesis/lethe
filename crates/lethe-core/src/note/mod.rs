@@ -1,7 +1,4 @@
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
+use std::io;
 
 use chrono::{DateTime, Utc};
 #[cfg(all(test, feature = "arbitrary"))]
@@ -13,7 +10,7 @@ use crate::identifier::Identifier;
 
 const RESERVED_KEYS: [&str; 4] = ["id", "ctime", "mtime", "aliases"];
 
-fn is_reserved_key(key: &str) -> bool {
+pub(crate) fn is_reserved_key(key: &str) -> bool {
     RESERVED_KEYS.iter().any(|reserved| reserved == &key)
 }
 
@@ -67,110 +64,38 @@ pub enum MetadataError {
 }
 
 impl Note {
-    /// Create a new note with the given body and list of aliases
-    pub fn new(root: &Path, body: String, aliases: Vec<String>) -> Result<Self, NoteError> {
-        let id = Identifier::new();
-
-        let ctime = Utc::now();
-        let mtime = ctime;
-        let meta = Metadata {
-            id: id.clone(),
-            ctime,
-            mtime,
-            aliases,
-            extra: toml::Table::new(),
-        };
-
-        let mut note = Self {
-            body,
-            meta,
-            dirty_body: true,
-            dirty_meta: true,
-        };
-        note.write(root)?;
-
-        Ok(note)
-    }
-
-    /// Write the current note into its file
-    pub fn write(&mut self, root: &Path) -> Result<(), NoteError> {
-        if !self.dirty_body && !self.dirty_meta {
-            return Ok(());
-        }
-
-        let dir_path = root.join(self.meta.id.to_string());
-        fs::create_dir_all(&dir_path).map_err(|error| NoteError::NoteCreateDirError {
-            id: self.meta.id.clone(),
-            error,
-        })?;
-
-        if self.dirty_meta {
-            let meta_serialised =
-                toml::to_string(&self.meta).map_err(|error| NoteError::MetadataSerialiseError {
-                    id: self.meta.id.clone(),
-                    error,
-                })?;
-            let meta_path = dir_path.join("meta.toml");
-
-            fs::write(meta_path, meta_serialised).map_err(|error| {
-                NoteError::MetadataWriteError {
-                    id: self.meta.id.clone(),
-                    error,
-                }
-            })?;
-            self.dirty_meta = false;
-        }
-
-        if self.dirty_body {
-            let body_path = dir_path.join("body.md");
-            fs::write(body_path, self.body.clone()).map_err(|error| NoteError::BodyWriteError {
-                id: self.meta.id.clone(),
-                error,
-            })?;
-            self.dirty_body = false;
-        }
-
-        Ok(())
-    }
-
-    /// Read a note of the given `id` from `root`
-    pub fn read(id: Identifier, root: PathBuf) -> Result<Self, NoteError> {
-        let dir = root.join(id.to_string());
-        let meta_path = dir.join("meta.toml");
-        let body_path = dir.join("body.md");
-        let meta = match fs::read_to_string(meta_path) {
-            Ok(val) => match toml::from_str::<Metadata>(&val) {
-                Ok(val) => val,
-                Err(error) => return Err(NoteError::MetadataParseError { id, error }),
-            },
-
-            Err(error) => return Err(NoteError::MetadataReadError { id, error }),
-        };
-        let body = fs::read_to_string(body_path)
-            .map_err(|error| NoteError::BodyReadError { id, error })?;
-        Ok(Self {
+    pub(crate) fn from_parts(
+        meta: Metadata,
+        body: String,
+        dirty_body: bool,
+        dirty_meta: bool,
+    ) -> Self {
+        Self {
             meta,
             body,
-            dirty_body: false,
-            dirty_meta: false,
-        })
+            dirty_body,
+            dirty_meta,
+        }
     }
 
-    pub fn update(
-        &mut self,
-        f: impl FnOnce(&mut NoteEditor<'_>) -> Result<(), MetadataError>,
-    ) -> Result<bool, MetadataError> {
-        let mut editor = NoteEditor::new(self);
-        f(&mut editor)?;
-        let mutated = editor.mutated;
-        let dirty_body = editor.dirty_body;
-        let dirty_meta = editor.dirty_meta;
-        if mutated {
-            self.dirty_body |= dirty_body;
-            self.dirty_meta |= dirty_meta;
-            self.touch();
-        }
-        Ok(mutated)
+    pub(crate) fn is_dirty_body(&self) -> bool {
+        self.dirty_body
+    }
+
+    pub(crate) fn is_dirty_meta(&self) -> bool {
+        self.dirty_meta
+    }
+
+    pub(crate) fn mark_body_clean(&mut self) {
+        self.dirty_body = false;
+    }
+
+    pub(crate) fn mark_meta_clean(&mut self) {
+        self.dirty_meta = false;
+    }
+
+    pub(crate) fn mark_dirty_body(&mut self) {
+        self.dirty_body = true;
     }
 
     pub fn set_body(&mut self, body: String) {
@@ -179,7 +104,7 @@ impl Note {
         }
         self.body = body;
         self.dirty_body = true;
-        self.touch();
+        self.touch_at(Utc::now());
     }
 
     /// Get the note's metadata
@@ -192,8 +117,8 @@ impl Note {
         &self.body
     }
 
-    fn touch(&mut self) {
-        self.meta.mtime = Utc::now();
+    pub(crate) fn touch_at(&mut self, now: DateTime<Utc>) {
+        self.meta.mtime = now;
         self.dirty_meta = true;
     }
 }
@@ -208,13 +133,21 @@ pub struct NoteEditor<'a> {
 }
 
 impl<'a> NoteEditor<'a> {
-    fn new(note: &'a mut Note) -> Self {
+    pub(crate) fn new(note: &'a mut Note) -> Self {
         Self {
             note,
             mutated: false,
             dirty_body: false,
             dirty_meta: false,
         }
+    }
+
+    pub(crate) fn mutated(&self) -> bool {
+        self.mutated
+    }
+
+    pub(crate) fn dirty_body(&self) -> bool {
+        self.dirty_body
     }
 
     pub fn body(&self) -> &str {
@@ -332,6 +265,22 @@ pub struct Metadata {
 }
 
 impl Metadata {
+    pub(crate) fn new(
+        id: Identifier,
+        ctime: DateTime<Utc>,
+        mtime: DateTime<Utc>,
+        aliases: Vec<String>,
+        extra: toml::Table,
+    ) -> Self {
+        Self {
+            id,
+            ctime,
+            mtime,
+            aliases,
+            extra,
+        }
+    }
+
     /// Get the note's unique identifier.
     pub fn id(&self) -> &Identifier {
         &self.id
@@ -361,7 +310,9 @@ impl Metadata {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::{NoteStore, Store};
     use proptest::prelude::*;
+    use std::fs;
     use tempfile::tempdir;
 
     fn body_strategy() -> impl Strategy<Value = String> {
@@ -712,9 +663,10 @@ mod tests {
         ) {
             let dir = tempdir().unwrap();
             let root = dir.path().to_path_buf();
+            let store = NoteStore::new(root.clone());
 
-            let note = Note::new(&root, body.clone(), aliases.clone()).unwrap();
-            let reread = Note::read(note.meta.id.clone(), root).unwrap();
+            let note = store.create(body.clone(), aliases.clone()).unwrap();
+            let reread = store.read(note.meta().id().clone()).unwrap();
 
             prop_assert_eq!(reread.body, body);
             prop_assert_eq!(reread.meta.aliases, aliases);
@@ -772,7 +724,8 @@ mod tests {
             fs::write(dir_path.join("meta.toml"), meta_serialised).unwrap();
             fs::write(dir_path.join("body.md"), body.clone()).unwrap();
 
-            let reread = Note::read(id, root).unwrap();
+            let store = NoteStore::new(root);
+            let reread = store.read(id).unwrap();
 
             prop_assert_eq!(reread.body, body);
             prop_assert_eq!(reread.meta.aliases, aliases);
@@ -790,6 +743,7 @@ mod tests {
         ) {
             let mut note = make_note(body, aliases, extra);
             let mut model = Model::from_note(&note);
+            let store = NoteStore::new(std::path::PathBuf::new());
 
             for op in ops {
                 let old_mtime = note.meta.mtime.clone();
@@ -799,7 +753,8 @@ mod tests {
                 let (changed_body, changed_meta) = model.apply_op(&op);
                 let expected_mutated = changed_body || changed_meta;
 
-                let mutated = note.update(|editor| apply_op_editor(editor, &op)).unwrap();
+                let mutated =
+                    store.update(&mut note, |editor| apply_op_editor(editor, &op)).unwrap();
                 prop_assert_eq!(mutated, expected_mutated);
 
                 let note_meta = note.meta();
@@ -835,24 +790,25 @@ mod tests {
             value in toml_value_strategy(),
         ) {
             let mut note = make_note(body, aliases, extra);
+            let store = NoteStore::new(std::path::PathBuf::new());
 
             let before = snapshot(&note);
-            let res = note.update(|editor| {
+            let res = store.update(&mut note, |editor| {
                 editor.set_extra_value(key.clone(), value.clone()).map(|_| ())
             });
             prop_assert!(res.is_err());
             prop_assert_eq!(snapshot(&note), before);
 
             let before = snapshot(&note);
-            let res = note.update(|editor| editor.remove_extra_key(&key)
-                                                 .map(|_| ()));
+            let res = store
+                .update(&mut note, |editor| editor.remove_extra_key(&key).map(|_| ()));
             prop_assert!(res.is_err());
             prop_assert_eq!(snapshot(&note), before);
 
             let before = snapshot(&note);
             let mut table = toml::Table::new();
             table.insert(key, value);
-            let res = note.update(|editor| editor.set_extra(table).map(|_| ()));
+            let res = store.update(&mut note, |editor| editor.set_extra(table).map(|_| ()));
             prop_assert!(res.is_err());
             prop_assert_eq!(snapshot(&note), before);
         }
@@ -877,9 +833,10 @@ mod tests {
                 aliases.clone(),
                 extra_with_key
             );
+            let store = NoteStore::new(std::path::PathBuf::new());
 
             let old_mtime = note.meta.mtime.clone();
-            let mutated = note.update(|editor| {
+            let mutated = store.update(&mut note, |editor| {
                 editor.set_body(body.clone());
                 Ok(())
             }).unwrap();
@@ -887,7 +844,7 @@ mod tests {
             prop_assert_eq!(note.meta.mtime, old_mtime);
 
             let old_mtime = note.meta.mtime.clone();
-            let mutated = note.update(|editor| {
+            let mutated = store.update(&mut note, |editor| {
                 editor.set_body(other_body.clone());
                 Ok(())
             }).unwrap();
@@ -895,7 +852,7 @@ mod tests {
             prop_assert!(note.meta.mtime >= old_mtime);
 
             let old_mtime = note.meta.mtime.clone();
-            let mutated = note.update(|editor| {
+            let mutated = store.update(&mut note, |editor| {
                 editor.set_aliases(aliases.clone());
                 Ok(())
             }).unwrap();
@@ -903,7 +860,7 @@ mod tests {
             prop_assert_eq!(note.meta.mtime, old_mtime);
 
             let old_mtime = note.meta.mtime.clone();
-            let mutated = note.update(|editor| {
+            let mutated = store.update(&mut note, |editor| {
                 editor.set_aliases(other_aliases.clone());
                 Ok(())
             }).unwrap();
@@ -911,21 +868,21 @@ mod tests {
             prop_assert!(note.meta.mtime >= old_mtime);
 
             let old_mtime = note.meta.mtime.clone();
-            let mutated = note.update(|editor| {
+            let mutated = store.update(&mut note, |editor| {
                 editor.set_extra_value(key.clone(), value.clone()).map(|_| ())
             }).unwrap();
             prop_assert!(!mutated);
             prop_assert_eq!(note.meta.mtime, old_mtime);
 
             let old_mtime = note.meta.mtime.clone();
-            let mutated = note.update(|editor| {
+            let mutated = store.update(&mut note, |editor| {
                 editor.remove_extra_key(&other_key).map(|_| ())
             }).unwrap();
             prop_assert!(!mutated);
             prop_assert_eq!(note.meta.mtime, old_mtime);
 
             let old_mtime = note.meta.mtime.clone();
-            let mutated = note.update(|editor| {
+            let mutated = store.update(&mut note, |editor| {
                 editor.clear_extra();
                 Ok(())
             }).unwrap();
@@ -933,7 +890,7 @@ mod tests {
             prop_assert!(note.meta.mtime >= old_mtime);
 
             let old_mtime = note.meta.mtime.clone();
-            let mutated = note.update(|editor| {
+            let mutated = store.update(&mut note, |editor| {
                 editor.clear_extra();
                 Ok(())
             }).unwrap();
@@ -941,34 +898,34 @@ mod tests {
             prop_assert_eq!(note.meta.mtime, old_mtime);
 
             let old_mtime = note.meta.mtime.clone();
-            let mutated = note.update(|editor| {
+            let mutated = store.update(&mut note, |editor| {
                 editor.set_extra_value(key.clone(), other_value).map(|_| ())
             }).unwrap();
             prop_assert!(mutated);
             prop_assert!(note.meta.mtime >= old_mtime);
 
             let old_mtime = note.meta.mtime.clone();
-            let mutated = note.update(|editor| {
+            let mutated = store.update(&mut note, |editor| {
                 editor.remove_extra_key(&key).map(|_| ())
             }).unwrap();
             prop_assert!(mutated);
             prop_assert!(note.meta.mtime >= old_mtime);
 
             let old_mtime = note.meta.mtime.clone();
-            let mutated = note.update(|editor| editor.set_extra(extra.clone())
+            let mutated = store.update(&mut note, |editor| editor.set_extra(extra.clone())
                                                      .map(|_| ())).unwrap();
             prop_assert!(mutated);
             prop_assert!(note.meta.mtime >= old_mtime);
 
             let old_mtime = note.meta.mtime.clone();
-            let mutated = note.update(|editor| editor.set_extra(extra)
+            let mutated = store.update(&mut note, |editor| editor.set_extra(extra)
                                                      .map(|_| ())).unwrap();
             prop_assert!(!mutated);
             prop_assert_eq!(note.meta.mtime, old_mtime);
 
             let old_mtime = note.meta.mtime.clone();
             let mutated =
-                note.update(|editor| editor.set_extra(other_extra)
+                store.update(&mut note, |editor| editor.set_extra(other_extra)
                                            .map(|_| ())).unwrap();
             prop_assert!(mutated);
             prop_assert!(note.meta.mtime >= old_mtime);

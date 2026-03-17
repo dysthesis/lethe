@@ -13,7 +13,7 @@ use uuid::Uuid;
 // TODO: Look into whether there are more human-friendly (i.e., readable and
 // writeable) alternatives.
 #[cfg_attr(all(test, feature = "arbitrary"), derive(Arbitrary))]
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct Identifier(Uuid);
 
 impl Identifier {
