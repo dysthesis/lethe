@@ -35,6 +35,9 @@ jobs:
           - lethe-workspace-deny
           - lethe-workspace-nextest
           - lethe-workspace-hakari
+          - lethe-workspace-deadnix
+          - lethe-workspace-statix
+          - lethe-workspace-llvm-cov
           - treefmt
 
     steps:

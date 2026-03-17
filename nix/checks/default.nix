@@ -6,11 +6,25 @@
     craneLib,
     commonArgs,
     cargoArtifacts,
+    workspaceRoot,
     src,
     inputs',
     ...
   }: let
     advisoryDb = inputs.advisory-db;
+    nixSrc = lib.cleanSourceWith {
+      src = workspaceRoot;
+      filter = path: _type: let
+        rel = lib.removePrefix (toString workspaceRoot + "/") (toString path);
+        isExcluded = lib.any (prefix: lib.hasPrefix prefix rel) [
+          ".git"
+          ".direnv"
+          "target"
+          "result"
+        ];
+      in
+        !isExcluded;
+    };
   in {
     checks = {
       # Build the crates as part of `nix flake check` for convenience.
@@ -66,6 +80,36 @@
         nativeBuildInputs = [
           pkgs.cargo-hakari
         ];
+      };
+
+      lethe-workspace-deadnix =
+        pkgs.runCommand "lethe-workspace-deadnix" {
+          nativeBuildInputs = [pkgs.deadnix];
+        } ''
+          deadnix --fail ${nixSrc}
+          mkdir -p $out
+        '';
+
+      lethe-workspace-statix =
+        pkgs.runCommand "lethe-workspace-statix" {
+          nativeBuildInputs = [pkgs.statix];
+        } ''
+          statix check ${nixSrc}
+          mkdir -p $out
+        '';
+
+      lethe-workspace-llvm-cov = craneLib.mkCargoDerivation {
+        inherit src cargoArtifacts;
+        pname = "lethe-workspace-llvm-cov";
+        doInstallCargoArtifacts = false;
+        nativeBuildInputs = [pkgs.cargo-llvm-cov];
+        buildPhaseCargoCommand = ''
+          cargo llvm-cov --workspace --all-targets --locked --lcov --output-path lcov.info
+        '';
+        installPhase = ''
+          mkdir -p $out
+          cp lcov.info $out/
+        '';
       };
     };
   };

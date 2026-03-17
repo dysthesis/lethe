@@ -61,6 +61,7 @@
         lib
         toolchain
         craneLib
+        workspaceRoot
         src
         commonArgs
         cargoArtifacts
