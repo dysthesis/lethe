@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flake-checks:
+    name: Nix check (${{ matrix.os }}, ${{ matrix.check }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+        check:
+          - lethe-cli
+          - lethe-core
+          - lethe-workspace-clippy
+          - lethe-workspace-doc
+          - lethe-workspace-audit
+          - lethe-workspace-deny
+          - lethe-workspace-nextest
+          - lethe-workspace-hakari
+          - treefmt
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v21
+        with:
+          extra-conf: |
+            accept-flake-config = true
+
+      - name: Enable Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v13
+
+      - name: Detect Nix system
+        run: echo "NIX_SYSTEM=$(nix eval --raw --impure --expr builtins.currentSystem)" >> "$GITHUB_ENV"
+
+      - name: Run flake check
+        run: |
+          nix build \
+            .#checks.${{ env.NIX_SYSTEM }}.${{ matrix.check }} \
+            --accept-flake-config \
+            --no-update-lock-file \
+            --print-build-logs \
+            --show-trace
