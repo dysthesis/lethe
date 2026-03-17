@@ -9,3 +9,6 @@ clap = { version = "4.6.0", features = ["derive"] }
 color-eyre = "0.6.5"
 lethe-core = { path = "../lethe-core" }
 lethe-workspace-hack = { version = "0.1", path = "../lethe-workspace-hack" }
+shell-words = "1.1.0"
+tempfile = "3.10.1"
+toml = { version = "1.0.6", default-features = false, features = ["parse"] }

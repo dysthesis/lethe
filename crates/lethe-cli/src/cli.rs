@@ -13,11 +13,34 @@ pub struct Cli {
 #[derive(Subcommand, Clone)]
 pub enum Command {
     New {
-        body: String,
+        body: Option<String>,
+        #[arg(long, conflicts_with_all = ["body", "body_stdin"])]
+        body_file: Option<PathBuf>,
+        #[arg(long, conflicts_with_all = ["body", "body_file"])]
+        body_stdin: bool,
         #[arg(short, long, value_delimiter = ',')]
         aliases: Option<Vec<String>>,
     },
     Read {
         id: String,
+    },
+    Edit {
+        id: String,
+        #[arg(long, conflicts_with_all = ["body_file", "body_stdin"])]
+        body: Option<String>,
+        #[arg(long, conflicts_with_all = ["body", "body_stdin"])]
+        body_file: Option<PathBuf>,
+        #[arg(long, conflicts_with_all = ["body", "body_file"])]
+        body_stdin: bool,
+        #[arg(long, value_delimiter = ',', conflicts_with = "clear_aliases")]
+        aliases: Option<Vec<String>>,
+        #[arg(long, conflicts_with = "aliases")]
+        clear_aliases: bool,
+        #[arg(long = "set", value_name = "KEY=VALUE")]
+        set: Vec<String>,
+        #[arg(long = "unset", value_name = "KEY")]
+        unset: Vec<String>,
+        #[arg(long)]
+        clear_extra: bool,
     },
 }
